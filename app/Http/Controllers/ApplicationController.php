@@ -30,36 +30,38 @@ class ApplicationController extends Controller
      */
     public function store(Request $request)
     {
-        $existing_application_id = Application::where('applicationId', $request->applicationId)->exists();
-        if ($existing_application_id) {
+        if (Application::where('applicationId', $request->applicationId)->exists()) {
             return redirect()->back()->with('message', 'Application ID already exists.');
         }
-            $request->validate([
-                'applicationId' => 'required|string',
-                'email' => 'required|email',
-                'firstname' => 'required|string',
-                'lastname' => 'required|string',
-                'phone' => 'required|string',
-                'fslc' => 'required|image|mimes:jpeg,png,jpg,svg|max:2048',
-                'olevel' => 'required|image|mimes:jpeg,png,jpg,svg|max:2048'
 
-            ]);
+        $request->validate([
+            'applicationId' => 'required|string',
+            'email' => 'required|email',
+            'firstname' => 'required|string',
+            'lastname' => 'required|string',
+            'phone' => 'required|string',
+            'fslc' => 'required|image|mimes:jpeg,png,jpg,svg|max:2048',
+            'olevel' => 'required|image|mimes:jpeg,png,jpg,svg|max:2048'
+        ]);
 
-            $applicationData = $request->all();
-            if($fslc = $request->file('fslc')){
-                $fslc_name = time().'_'.$fslc->getClientOriginalName();
-                $fslc->move(public_path('images/fslc/'), $fslc_name);
-                $applicationData['fslc'] = $fslc_name;
-            }
-            if($olevel = $request->file('olevel')){
-                $olevel_name = time().'_'.$olevel->getClientOriginalName();
-                $olevel->move(public_path('images/olevel/'), $olevel_name);
-                $applicationData['olevel'] = $olevel_name;
-            }
-            Application::create($applicationData);
-        
-        // Redirect with success message
+        $applicationData = $request->all();
+
+        // Extract file uploads and handle them
+        $this->handleFileUpload('fslc', 'images/fslc/', $applicationData);
+        $this->handleFileUpload('olevel', 'images/olevel/', $applicationData);
+
+        Application::create($applicationData);
+
         return redirect()->route('application.index')->with('success', 'Application created successfully.');
+    }
+
+    private function handleFileUpload($field, $directory, &$data)
+    {
+        if ($file = request()->file($field)) {
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path($directory), $filename);
+            $data[$field] = $filename;
+        }
     }
 
     /**
@@ -91,22 +93,21 @@ class ApplicationController extends Controller
             'phone' => 'required|string',
         ]);
 
-        if($fslc = $request->file('fslc')){
-            $fslc_name = time().'_'.$fslc->getClientOriginalName();
-            $fslc->move(public_path('images/fslc/'), $fslc_name);
-            $requestData['fslc'] = $fslc_name;
-        }else{
-            unset($requestData['fslc']);
+        $files = [
+            'fslc' => 'images/fslc/',
+            'olevel' => 'images/olevel/',
+        ];
+        
+        foreach ($files as $file => $path) {
+            if ($request->hasFile($file)) {
+                $fileName = time(). '_'. $request->file($file)->getClientOriginalName();
+                $request->file($file)->move(public_path($path), $fileName);
+                $requestData[$file] = $fileName;
+            } else {
+                unset($requestData[$file]);
+            }
         }
 
-        if($olevel = $request->file('olevel')){
-            $olevel_name = time().'_'.$olevel->getClientOriginalName();
-            $olevel->move(public_path('images/olevel/'), $olevel_name);
-            $requestData['olevel'] = $fslc_name;
-        }else{
-            unset($requestData['olevel']);
-        }
-        
         $application->update($requestData);
         return redirect()->route('application.index')->with('success', 'Application updated successfully');
     }
@@ -115,7 +116,23 @@ class ApplicationController extends Controller
      */
     public function destroy(Application $application)
     {
+        // Check if fslc and olevel files exist in public folder
+        $this->deleteFile('images/fslc/', $application->fslc);
+        $this->deleteFile('images/olevel/', $application->olevel);
+    
+
+        // Delete the application record
         $application->delete();
+
+
         return redirect()->route('application.index')->with('success', 'Application deleted successfully');
+    }
+
+    private function deleteFile($directory, $filename)
+    {
+        $filePath = public_path($directory . $filename);
+        if (file_exists($filePath)) {
+            unlink($filePath);
+        }
     }
 }
