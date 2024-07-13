@@ -29,6 +29,7 @@ return new class extends Migration
             $table->enum('religion', ['christianity', 'islam', 'other'])->default('christianity');
             $table->string('fslc');
             $table->string('olevel');
+            $table->enum('status', ['applied', 'pending', 'in progress', 'not admitted']);
             $table->timestamps();
         });
     }
